@@ -4,9 +4,11 @@
 
 本项目将 Cursor CLI（`agent` 命令）包装为标准的 HTTP API 服务，让 [OpenClaw](https://docs.openclaw.ai)、[Continue.dev](https://continue.dev) 等任何支持 OpenAI 格式的工具都能直接调用你的 Cursor 订阅额度。
 
+支持 macOS、Linux、Windows。
+
 ## 快速开始
 
-### 前置条件：安装 Cursor CLI
+### 1. 安装 Cursor CLI
 
 **macOS / Linux / WSL：**
 
@@ -22,7 +24,16 @@ irm 'https://cursor.com/install?win32=true' | iex
 $env:CURSOR_API_KEY="your_key_here"
 ```
 
-### 安装 & 启动
+### 2. 安装本项目
+
+**方式 A — npm 全局安装（推荐）：**
+
+```bash
+npm install -g cursor-agent-api-proxy
+cursor-agent-api
+```
+
+**方式 B — 从源码：**
 
 ```bash
 git clone https://github.com/tageecc/cursor-agent-api-proxy.git
@@ -35,6 +46,8 @@ pnpm start
 
 ## 试一下
 
+**macOS / Linux / WSL：**
+
 ```bash
 # 非流式
 curl -X POST http://localhost:4646/v1/chat/completions \
@@ -45,6 +58,20 @@ curl -X POST http://localhost:4646/v1/chat/completions \
 curl -N -X POST http://localhost:4646/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"cursor/auto","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
+```
+
+**Windows (PowerShell)：**
+
+```powershell
+# 非流式
+Invoke-RestMethod -Method POST -Uri http://localhost:4646/v1/chat/completions `
+  -ContentType "application/json" `
+  -Body '{"model":"cursor/auto","messages":[{"role":"user","content":"Hello!"}]}' | ConvertTo-Json -Depth 10
+
+# 流式 (curl.exe 在 Windows 10+ 内置)
+curl.exe -N -X POST http://localhost:4646/v1/chat/completions `
+  -H "Content-Type: application/json" `
+  -d '{\"model\":\"cursor/auto\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}],\"stream\":true}'
 ```
 
 ## 配置 OpenClaw
@@ -155,7 +182,9 @@ print(resp.choices[0].message.content)
 }
 ```
 
-## macOS 开机自启
+## 开机自启
+
+### macOS (LaunchAgent)
 
 ```bash
 cat > ~/Library/LaunchAgents/com.cursor-agent-api.plist << 'EOF'
@@ -188,6 +217,68 @@ EOF
 
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.cursor-agent-api.plist
 ```
+
+### Windows (Task Scheduler)
+
+打开 PowerShell（管理员），运行：
+
+```powershell
+$action = New-ScheduledTaskAction `
+  -Execute "node.exe" `
+  -Argument "C:\Users\$env:USERNAME\AppData\Roaming\npm\node_modules\cursor-agent-api-proxy\dist\server\standalone.js"
+
+$trigger = New-ScheduledTaskTrigger -AtLogon
+
+$settings = New-ScheduledTaskSettingsSet `
+  -AllowStartIfOnBatteries `
+  -DontStopIfGoingOnBatteries `
+  -RestartCount 3 `
+  -RestartInterval (New-TimeSpan -Minutes 1)
+
+Register-ScheduledTask `
+  -TaskName "CursorAgentAPI" `
+  -Action $action `
+  -Trigger $trigger `
+  -Settings $settings `
+  -Description "Cursor Agent API Proxy" `
+  -RunLevel Highest
+```
+
+> 路径可能因安装方式不同而变化。运行 `npm root -g` 查看全局 node_modules 路径。
+> 如需设置 `CURSOR_API_KEY`，在系统环境变量中添加即可（设置 → 系统 → 高级系统设置 → 环境变量）。
+
+卸载自启：
+
+```powershell
+Unregister-ScheduledTask -TaskName "CursorAgentAPI" -Confirm:$false
+```
+
+### Linux (systemd)
+
+```bash
+sudo tee /etc/systemd/system/cursor-agent-api.service << 'EOF'
+[Unit]
+Description=Cursor Agent API Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+Environment=CURSOR_API_KEY=your_key_here
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/node /usr/local/lib/node_modules/cursor-agent-api-proxy/dist/server/standalone.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now cursor-agent-api
+```
+
+查看状态：`sudo systemctl status cursor-agent-api`
 
 ## 项目结构
 
