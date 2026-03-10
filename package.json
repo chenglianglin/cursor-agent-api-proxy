@@ -1,0 +1,43 @@
+{
+  "name": "cursor-agent-api-proxy",
+  "version": "1.0.0",
+  "description": "Use your Cursor subscription with any OpenAI-compatible client. Wraps Cursor CLI (agent) as an OpenAI-compatible API server.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "cursor-agent-api": "dist/server/standalone.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/server/standalone.js",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "cursor",
+    "cursor-cli",
+    "agent",
+    "openai-compatible",
+    "api-server",
+    "openclaw",
+    "llm",
+    "ai",
+    "proxy"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.7",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
