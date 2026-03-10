@@ -1,39 +1,45 @@
 # cursor-agent-api-proxy
 
-把你的 Cursor 订阅变成 OpenAI 兼容的 API 接口。
+[![npm version](https://img.shields.io/npm/v/cursor-agent-api-proxy)](https://www.npmjs.com/package/cursor-agent-api-proxy)
+[![npm downloads](https://img.shields.io/npm/dm/cursor-agent-api-proxy)](https://www.npmjs.com/package/cursor-agent-api-proxy)
+[![license](https://img.shields.io/npm/l/cursor-agent-api-proxy)](./LICENSE)
 
-本项目将 Cursor CLI（`agent` 命令）包装为标准的 HTTP API 服务，让 [OpenClaw](https://docs.openclaw.ai)、[Continue.dev](https://continue.dev) 等任何支持 OpenAI 格式的工具都能直接调用你的 Cursor 订阅额度。
+[中文文档](./README.zh-CN.md)
 
-支持 macOS、Linux、Windows。
+Turn your Cursor subscription into an OpenAI-compatible API.
 
-## 快速开始
+This project wraps the Cursor CLI (`agent` command) as an HTTP server that speaks the OpenAI API format, so tools like [OpenClaw](https://docs.openclaw.ai), [Continue.dev](https://continue.dev), or any OpenAI-compatible client can use your Cursor subscription directly.
 
-### 1. 安装 Cursor CLI
+Works on macOS, Linux, and Windows.
 
-**macOS / Linux / WSL：**
+## Getting Started
+
+### 1. Install the Cursor CLI
+
+**macOS / Linux / WSL:**
 
 ```bash
 curl https://cursor.com/install -fsS | bash
 export CURSOR_API_KEY=your_key_here
 ```
 
-**Windows (PowerShell)：**
+**Windows (PowerShell):**
 
 ```powershell
 irm 'https://cursor.com/install?win32=true' | iex
 $env:CURSOR_API_KEY="your_key_here"
 ```
 
-### 2. 安装本项目
+### 2. Install the proxy
 
-**方式 A — npm 全局安装（推荐）：**
+**Option A — npm global install (recommended):**
 
 ```bash
 npm install -g cursor-agent-api-proxy
 cursor-agent-api
 ```
 
-**方式 B — 从源码：**
+**Option B — from source:**
 
 ```bash
 git clone https://github.com/tageecc/cursor-agent-api-proxy.git
@@ -42,44 +48,43 @@ pnpm install && pnpm run build
 pnpm start
 ```
 
-服务默认运行在 `http://localhost:4646`。
+The server listens on `http://localhost:4646` by default.
 
-## 试一下
+## Try it
 
-**macOS / Linux / WSL：**
+**macOS / Linux / WSL:**
 
 ```bash
-# 非流式
+# non-streaming
 curl -X POST http://localhost:4646/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"cursor/auto","messages":[{"role":"user","content":"Hello!"}]}'
 
-# 流式
+# streaming
 curl -N -X POST http://localhost:4646/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"cursor/auto","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
 ```
 
-**Windows (PowerShell)：**
+**Windows (PowerShell):**
 
 ```powershell
-# 非流式
+# non-streaming
 Invoke-RestMethod -Method POST -Uri http://localhost:4646/v1/chat/completions `
   -ContentType "application/json" `
   -Body '{"model":"cursor/auto","messages":[{"role":"user","content":"Hello!"}]}' | ConvertTo-Json -Depth 10
 
-# 流式 (curl.exe 在 Windows 10+ 内置)
+# streaming (curl.exe is built-in on Windows 10+)
 curl.exe -N -X POST http://localhost:4646/v1/chat/completions `
   -H "Content-Type: application/json" `
   -d '{\"model\":\"cursor/auto\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}],\"stream\":true}'
 ```
 
-## 配置 OpenClaw
+## OpenClaw Configuration
 
 ```json5
 {
   env: {
-    // 填你的 Cursor API Key，会透传给 Cursor CLI
     OPENAI_API_KEY: "your_cursor_api_key",
     OPENAI_BASE_URL: "http://localhost:4646/v1",
   },
@@ -91,15 +96,15 @@ curl.exe -N -X POST http://localhost:4646/v1/chat/completions `
 }
 ```
 
-> `OPENAI_API_KEY` 可以直接填你的 Cursor API Key。代理会从 `Authorization` header 提取并透传给 Cursor CLI。如果你已经在系统环境变量里设置了 `CURSOR_API_KEY`，这里填 `"not-needed"` 也行。
+> You can put your Cursor API Key directly in `OPENAI_API_KEY`. The proxy extracts it from the `Authorization` header and passes it to the Cursor CLI. If you've already set `CURSOR_API_KEY` as a system environment variable, use `"not-needed"` here instead.
 
-## 支持的模型
+## Models
 
-通过 `cursor/` 前缀指定模型：
+Specify models with the `cursor/` prefix:
 
-| Model ID | 说明 |
-|----------|------|
-| `cursor/auto` | 自动选择 |
+| Model ID | Description |
+|----------|-------------|
+| `cursor/auto` | Auto-select |
 | `cursor/opus-4.6-thinking` | Claude Opus 4.6 (thinking) |
 | `cursor/opus-4.6` | Claude Opus 4.6 |
 | `cursor/sonnet-4.5-thinking` | Claude Sonnet 4.5 (thinking) |
@@ -109,47 +114,47 @@ curl.exe -N -X POST http://localhost:4646/v1/chat/completions `
 | `cursor/gemini-3-pro` | Gemini 3 Pro |
 | `cursor/grok` | Grok |
 
-也支持 `cursor-auto`、`cursor-opus-4.6` 等 dash 格式（兼容不支持 `/` 的客户端）。
+Dash format (`cursor-auto`, `cursor-opus-4.6`, etc.) is also supported for clients that don't allow `/` in model names.
 
-完整列表调 `GET /v1/models` 查看。
+Full list available at `GET /v1/models`.
 
 ## API
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/health` | GET | 健康检查（含 CLI 版本） |
-| `/v1/models` | GET | 可用模型列表 |
-| `/v1/chat/completions` | POST | 聊天补全（支持流式） |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check (includes CLI version) |
+| `/v1/models` | GET | List available models |
+| `/v1/chat/completions` | POST | Chat completion (streaming supported) |
 
-## 环境变量
+## Environment Variables
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `PORT` | `4646` | 监听端口 |
-| `CURSOR_API_KEY` | - | Cursor API Key（也可通过 Authorization header 传递） |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `4646` | Listen port |
+| `CURSOR_API_KEY` | - | Cursor API Key (can also be passed via Authorization header) |
 
-端口也可以通过命令行参数指定：`cursor-agent-api 8080`
+Port can also be set via CLI argument: `cursor-agent-api 8080`
 
-## 原理
+## How it Works
 
 ```
-你的客户端 (OpenClaw / Python / curl ...)
+Your client (OpenClaw / Python / curl ...)
     │
-    │  POST /v1/chat/completions  (OpenAI 格式)
+    │  POST /v1/chat/completions  (OpenAI format)
     ▼
-cursor-agent-api-proxy (本项目)
+cursor-agent-api-proxy
     │
     │  spawn("agent", ["-p", "--output-format", "stream-json", ...])
-    │  prompt 通过 stdin 传入
+    │  prompt piped via stdin
     ▼
 Cursor CLI (agent)
     │
-    │  使用你的 Cursor 订阅额度
+    │  uses your Cursor subscription quota
     ▼
-AI 模型响应 → 转为 OpenAI 格式 → 返回客户端
+AI model response → converted to OpenAI format → returned to client
 ```
 
-## 其他客户端配置
+## Other Client Examples
 
 ### Python (openai SDK)
 
@@ -158,7 +163,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:4646/v1",
-    api_key="your_cursor_api_key",  # 或 "not-needed"
+    api_key="your_cursor_api_key",  # or "not-needed"
 )
 
 resp = client.chat.completions.create(
@@ -182,39 +187,39 @@ print(resp.choices[0].message.content)
 }
 ```
 
-## 开机自启
+## Auto-start Service
 
 ```bash
-cursor-agent-api install    # 注册为系统服务并启动
-cursor-agent-api uninstall  # 移除
+cursor-agent-api install    # register and start as system service
+cursor-agent-api uninstall  # remove
 ```
 
-会根据当前系统注册对应的服务：
+Platform-specific backend:
 - macOS → LaunchAgent
 - Windows → Task Scheduler
 - Linux → systemd user service
 
-已设置 `CURSOR_API_KEY` 环境变量的话，会自动写入服务配置。
+If `CURSOR_API_KEY` is set in your environment, it will be written into the service config automatically.
 
-## 项目结构
+## Project Structure
 
 ```
 src/
-├── index.ts               # 包导出
+├── index.ts               # package exports
 ├── types/
-│   ├── cursor-cli.ts      # Cursor CLI stream-json 输出类型
-│   └── openai.ts          # OpenAI API 类型
+│   ├── cursor-cli.ts      # Cursor CLI stream-json output types
+│   └── openai.ts          # OpenAI API types
 ├── adapter/
-│   ├── openai-to-cli.ts   # OpenAI 请求 → CLI prompt
-│   └── cli-to-openai.ts   # CLI 输出 → OpenAI 响应
+│   ├── openai-to-cli.ts   # OpenAI request → CLI prompt
+│   └── cli-to-openai.ts   # CLI output → OpenAI response
 ├── subprocess/
-│   └── manager.ts         # agent 子进程管理
+│   └── manager.ts         # agent subprocess management
 ├── service/
-│   └── install.ts         # install / uninstall 服务注册
+│   └── install.ts         # install / uninstall service registration
 └── server/
-    ├── index.ts           # Express 服务
-    ├── routes.ts          # API 路由
-    └── standalone.ts      # CLI 入口
+    ├── index.ts           # Express app
+    ├── routes.ts          # API routes
+    └── standalone.ts      # CLI entry point
 ```
 
 ## License
