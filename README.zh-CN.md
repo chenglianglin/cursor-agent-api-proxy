@@ -6,134 +6,103 @@
 
 [English](./README.md)
 
-Cursor CLI 的 OpenAI 兼容 API 代理。让 [OpenClaw](https://docs.openclaw.ai)、[Continue.dev](https://continue.dev) 等任何 OpenAI 兼容客户端直接使用你的 Cursor 订阅。
-
-支持 macOS、Linux、Windows。
+Cursor CLI 的 OpenAI 兼容 API 代理。让任何 OpenAI 兼容客户端直接使用你的 Cursor 订阅。
 
 ## 前置条件
 
-- **Node.js** 20+
-- **Cursor CLI** (`agent`) — 见下方步骤 1
-- 有效的 **Cursor 订阅**（Pro / Business 等）
+- Node.js 20+
+- 有效的 [Cursor](https://cursor.com) 订阅（Pro / Business）
 
 ## 安装
 
-### 1. 安装并认证 Cursor CLI
-
-**macOS / Linux / WSL：**
+**1. 安装 Cursor CLI 并登录：**
 
 ```bash
+# macOS / Linux
 curl https://cursor.com/install -fsS | bash
-```
 
-**Windows (PowerShell)：**
-
-```powershell
+# Windows PowerShell
 irm 'https://cursor.com/install?win32=true' | iex
 ```
 
-登录：
-
 ```bash
-agent login
+agent login          # 打开浏览器，用 Cursor 账号登录
+agent --list-models  # 确认 CLI 可用
 ```
 
-会打开浏览器，用你的 Cursor 账号登录即可。
+> **无头环境？** 跳过 `agent login`，到 [cursor.com/settings](https://cursor.com/settings) 生成 API Key，然后 `export CURSOR_API_KEY=<key>`。
 
-> **无头环境 / CI：** 无法打开浏览器时，到 [Cursor Settings](https://cursor.com/settings) 生成 API Key，通过环境变量传入：
->
-> ```bash
-> export CURSOR_API_KEY=your_key_here   # macOS / Linux
-> ```
->
-> ```powershell
-> $env:CURSOR_API_KEY="your_key_here"   # Windows PowerShell
-> ```
-
-确认 CLI 可用：
-
-```bash
-agent --list-models
-```
-
-### 2. 安装并启动代理
+**2. 安装并启动代理：**
 
 ```bash
 npm install -g cursor-agent-api-proxy
-cursor-agent-api
+cursor-agent-api    # 默认 http://localhost:4646
 ```
 
-服务默认运行在 `http://localhost:4646`。
-
-### 3. 验证
+**3. 验证：**
 
 ```bash
 curl http://localhost:4646/health
 ```
 
-发送测试请求：
+## 配合 OpenClaw 使用
 
-```bash
-curl -X POST http://localhost:4646/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"cursor/auto","messages":[{"role":"user","content":"Hello!"}]}'
-```
+> [OpenClaw](https://docs.openclaw.ai) 是开源 AI 编程代理。以下是接入 Cursor 代理的配置方法。
 
-## 配置 OpenClaw
+编辑 OpenClaw 配置文件：
 
 ```json5
 {
   env: {
-    OPENAI_API_KEY: "not-needed",
+    // 已通过 agent login 登录？设 null，不需要 key。
+    // 需要指定 key？填你的 Cursor API Key。
+    OPENAI_API_KEY: null,
     OPENAI_BASE_URL: "http://localhost:4646/v1",
   },
   agents: {
     defaults: {
-      model: { primary: "openai/cursor/auto" },
+      model: { primary: "openai/auto" },
     },
   },
 }
 ```
 
-> 如果已通过 `agent login` 登录，`OPENAI_API_KEY` 填任意非空值如 `"not-needed"` 即可。如果需要按请求传入特定的 Cursor API Key，填在这里——代理会从 `Authorization` header 提取并转发给 CLI。
+配完就行了，OpenClaw 的请求会通过代理转发给 Cursor。
 
-## 支持的模型
+## 模型
 
-通过 `cursor/` 前缀指定：
+模型 ID 和 `agent --list-models` 输出一致，直接填：
 
-| Model ID | 说明 |
-|----------|------|
-| `cursor/auto` | 自动选择 |
-| `cursor/opus-4.6-thinking` | Claude Opus 4.6 (thinking) |
-| `cursor/opus-4.6` | Claude Opus 4.6 |
-| `cursor/sonnet-4.5-thinking` | Claude Sonnet 4.5 (thinking) |
-| `cursor/sonnet-4.5` | Claude Sonnet 4.5 |
-| `cursor/gpt-5.3-codex` | GPT 5.3 Codex |
-| `cursor/gpt-5.2` | GPT 5.2 |
-| `cursor/gemini-3-pro` | Gemini 3 Pro |
-| `cursor/grok` | Grok |
+```bash
+auto                  # 自动选择
+gpt-5.2               # GPT-5.2
+gpt-5.3-codex         # GPT-5.3 Codex
+opus-4.6-thinking     # Claude Opus 4.6 (thinking)
+sonnet-4.5-thinking   # Claude Sonnet 4.5 (thinking)
+gemini-3-pro          # Gemini 3 Pro
+```
 
-也支持 dash 格式（`cursor-auto`、`cursor-opus-4.6`），兼容不支持 `/` 的客户端。完整列表：`GET /v1/models`。
+完整列表：`curl http://localhost:4646/v1/models` 或 `agent --list-models`。
 
 ## API
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/health` | GET | 健康检查（含 CLI 版本） |
-| `/v1/models` | GET | 可用模型列表 |
-| `/v1/chat/completions` | POST | 聊天补全（支持流式） |
+| `/health` | GET | 健康检查 |
+| `/v1/models` | GET | 模型列表 |
+| `/v1/chat/completions` | POST | 聊天补全（支持 `stream: true`） |
 
-## 环境变量
+## 配置
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `PORT` | `4646` | 监听端口（也可命令行指定：`cursor-agent-api 8080`） |
-| `CURSOR_API_KEY` | - | Cursor API Key（`agent login` 的替代方案） |
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| `PORT` | `4646` | 监听端口（或 `cursor-agent-api 8080`） |
+| `CURSOR_API_KEY` | - | `agent login` 的替代方案 |
 
 ## 开机自启
 
 ```bash
-cursor-agent-api install    # 注册为系统服务并启动
+cursor-agent-api install    # 注册为系统服务
 cursor-agent-api uninstall  # 移除
 ```
 
@@ -151,11 +120,11 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:4646/v1",
-    api_key="not-needed",
+    api_key="null",
 )
 
 resp = client.chat.completions.create(
-    model="cursor/auto",
+    model="auto",
     messages=[{"role": "user", "content": "Hello!"}],
 )
 print(resp.choices[0].message.content)
@@ -171,11 +140,22 @@ print(resp.choices[0].message.content)
   "models": [{
     "title": "Cursor",
     "provider": "openai",
-    "model": "cursor/auto",
+    "model": "auto",
     "apiBase": "http://localhost:4646/v1",
-    "apiKey": "not-needed"
+    "apiKey": "null"
   }]
 }
+```
+
+</details>
+
+<details>
+<summary>curl</summary>
+
+```bash
+curl -X POST http://localhost:4646/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
 </details>
@@ -183,16 +163,11 @@ print(resp.choices[0].message.content)
 ## 原理
 
 ```
-客户端 (OpenClaw / Python / curl ...)
-    │  POST /v1/chat/completions  (OpenAI 格式)
-    ▼
-cursor-agent-api-proxy
-    │  spawn("agent", ["-p", "--output-format", "stream-json", ...])
-    ▼
-Cursor CLI (agent)
-    │  使用你的 Cursor 订阅额度
-    ▼
-AI 响应 → 转为 OpenAI 格式 → 返回客户端
+客户端  →  POST /v1/chat/completions (OpenAI 格式)
+        →  cursor-agent-api-proxy
+        →  spawn agent CLI (stream-json)
+        →  Cursor 订阅
+        →  AI 响应 → OpenAI 格式 → 客户端
 ```
 
 ## 参与开发
