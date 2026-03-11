@@ -36,7 +36,8 @@ agent --list-models  # 确认 CLI 可用
 
 ```bash
 npm install -g cursor-agent-api-proxy
-cursor-agent-api    # 默认 http://localhost:4646
+cursor-agent-api          # 后台启动，默认 http://localhost:4646
+cursor-agent-api status   # 查看运行状态
 ```
 
 **3. 验证：**
@@ -44,6 +45,17 @@ cursor-agent-api    # 默认 http://localhost:4646
 ```bash
 curl http://localhost:4646/health
 ```
+
+**其他命令：**
+
+```bash
+cursor-agent-api stop           # 停止
+cursor-agent-api restart        # 重启
+cursor-agent-api start 8080     # 指定端口启动
+cursor-agent-api run            # 前台运行（调试用）
+```
+
+日志：`~/.cursor-agent-api/server.log`
 
 ## 配合 OpenClaw 使用
 
@@ -109,10 +121,12 @@ gemini-3-pro          # Gemini 3 Pro
 
 | 环境变量 | 默认值 | 说明 |
 |---------|--------|------|
-| `PORT` | `4646` | 监听端口（或 `cursor-agent-api 8080`） |
+| `PORT` | `4646` | 监听端口（或 `cursor-agent-api start 8080`） |
 | `CURSOR_API_KEY` | - | `agent login` 的替代方案 |
 
 ## 开机自启
+
+开机自动启动代理：
 
 ```bash
 cursor-agent-api install    # 注册为系统服务

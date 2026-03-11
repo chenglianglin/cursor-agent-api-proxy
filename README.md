@@ -36,7 +36,8 @@ agent --list-models  # verify it works
 
 ```bash
 npm install -g cursor-agent-api-proxy
-cursor-agent-api    # starts on http://localhost:4646
+cursor-agent-api          # starts in background on http://localhost:4646
+cursor-agent-api status   # check if running
 ```
 
 **3. Verify:**
@@ -44,6 +45,17 @@ cursor-agent-api    # starts on http://localhost:4646
 ```bash
 curl http://localhost:4646/health
 ```
+
+**Other commands:**
+
+```bash
+cursor-agent-api stop           # stop
+cursor-agent-api restart        # restart
+cursor-agent-api start 8080     # start on a custom port
+cursor-agent-api run            # run in foreground (for debugging)
+```
+
+Logs: `~/.cursor-agent-api/server.log`
 
 ## Use with OpenClaw
 
@@ -109,10 +121,12 @@ Full list: `curl http://localhost:4646/v1/models` or `agent --list-models`.
 
 | Env Variable | Default | Description |
 |--------------|---------|-------------|
-| `PORT` | `4646` | Listen port (or `cursor-agent-api 8080`) |
+| `PORT` | `4646` | Listen port (or `cursor-agent-api start 8080`) |
 | `CURSOR_API_KEY` | - | Alternative to `agent login` |
 
-## Auto-start
+## Auto-start (boot)
+
+To start the proxy automatically on system boot:
 
 ```bash
 cursor-agent-api install    # register as system service
