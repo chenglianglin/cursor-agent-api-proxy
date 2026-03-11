@@ -71,7 +71,7 @@ openclaw onboard
 
 1. Provider 类型 → 选 **Custom Provider**（OpenAI-compatible）
 2. Base URL → `http://localhost:4646/v1`
-3. API Key → 留空或输入 `null`（已 `agent login` 就不需要 key）
+3. API Key → 输入 `not-needed`（已 `agent login` 就不需要 key）
 4. Default model → `auto`（或 `agent --list-models` 中的任意模型）
 
 ### 已有配置（编辑配置文件）
@@ -81,9 +81,9 @@ OpenClaw 已经在用了？直接改配置文件：
 ```json5
 {
   env: {
-    // null = 不需要 key（已通过 agent login 登录）
+    // "not-needed" = 已通过 agent login 登录，不需要 key
     // 或填你的 Cursor API Key，代理会按请求转发
-    OPENAI_API_KEY: null,
+    OPENAI_API_KEY: "not-needed",
     OPENAI_BASE_URL: "http://localhost:4646/v1",
   },
   agents: {
@@ -147,7 +147,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:4646/v1",
-    api_key="null",
+    api_key="not-needed",
 )
 
 resp = client.chat.completions.create(
@@ -169,7 +169,7 @@ print(resp.choices[0].message.content)
     "provider": "openai",
     "model": "auto",
     "apiBase": "http://localhost:4646/v1",
-    "apiKey": "null"
+    "apiKey": "not-needed"
   }]
 }
 ```

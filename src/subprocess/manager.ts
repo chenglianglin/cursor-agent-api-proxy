@@ -10,10 +10,16 @@
 import { spawn, ChildProcess } from "child_process";
 import { EventEmitter } from "events";
 import type { CursorCliMessage } from "../types/cursor-cli.js";
-import { isSystemInit, isAssistantDelta, isResultMessage } from "../types/cursor-cli.js";
+import {
+  isSystemInit,
+  isAssistantMessage,
+  isToolCallMessage,
+  isResultMessage,
+} from "../types/cursor-cli.js";
 
 const IS_WIN = process.platform === "win32";
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
+const DEBUG = !!process.env.CURSOR_DEBUG;
 
 export interface SubprocessOptions {
   model: string;
@@ -37,6 +43,7 @@ export class CursorSubprocess extends EventEmitter {
   private timeoutId: NodeJS.Timeout | null = null;
   private isKilled = false;
   private detectedModel = "cursor-auto";
+  private turnBuffer = "";
 
   async start(prompt: string, options: SubprocessOptions): Promise<void> {
     const args = this.buildArgs(options);
@@ -144,21 +151,39 @@ export class CursorSubprocess extends EventEmitter {
   }
 
   private handleMessage(msg: CursorCliMessage): void {
+    if (DEBUG) {
+      console.error("[debug]", JSON.stringify(msg).slice(0, 300));
+    }
+
     if (isSystemInit(msg)) {
       if (msg.model) this.detectedModel = msg.model;
       return;
     }
 
-    if (isAssistantDelta(msg)) {
+    if (isAssistantMessage(msg)) {
       const text = msg.message.content
         .filter((c) => c.type === "text")
         .map((c) => c.text)
         .join("");
 
-      if (text) {
-        const delta: ContentDeltaEvent = { text };
-        this.emit("content_delta", delta);
+      if (!text) return;
+
+      if (text === this.turnBuffer) return;
+
+      if (text.startsWith(this.turnBuffer)) {
+        const diff = text.slice(this.turnBuffer.length);
+        if (diff) this.emit("content_delta", { text: diff } as ContentDeltaEvent);
+        this.turnBuffer = text;
+        return;
       }
+
+      this.emit("content_delta", { text } as ContentDeltaEvent);
+      this.turnBuffer += text;
+      return;
+    }
+
+    if (isToolCallMessage(msg)) {
+      this.turnBuffer = "";
       return;
     }
 

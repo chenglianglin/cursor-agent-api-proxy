@@ -71,7 +71,7 @@ When the wizard asks you to configure **Model/Auth**:
 
 1. Provider type → choose **Custom Provider** (OpenAI-compatible)
 2. Base URL → `http://localhost:4646/v1`
-3. API Key → leave empty or type `null` (not needed if you ran `agent login`)
+3. API Key → type `not-needed` (if you ran `agent login`)
 4. Default model → `auto` (or any model from `agent --list-models`)
 
 ### Existing setup (edit config)
@@ -81,9 +81,9 @@ Already have OpenClaw running? Edit the config file directly:
 ```json5
 {
   env: {
-    // null = no key needed (already logged in via agent login)
+    // "not-needed" = already logged in via agent login
     // or set your Cursor API Key here to forward it per-request
-    OPENAI_API_KEY: null,
+    OPENAI_API_KEY: "not-needed",
     OPENAI_BASE_URL: "http://localhost:4646/v1",
   },
   agents: {
@@ -147,7 +147,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:4646/v1",
-    api_key="null",
+    api_key="not-needed",
 )
 
 resp = client.chat.completions.create(
@@ -169,7 +169,7 @@ print(resp.choices[0].message.content)
     "provider": "openai",
     "model": "auto",
     "apiBase": "http://localhost:4646/v1",
-    "apiKey": "null"
+    "apiKey": "not-needed"
   }]
 }
 ```

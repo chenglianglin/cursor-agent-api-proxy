@@ -3,8 +3,12 @@
  *
  * `agent -p --output-format stream-json --stream-partial-output --yolo`
  *
- * Message flow:
- *   system(init) -> assistant(delta, has timestamp_ms) ... -> result
+ * Message flow (per turn):
+ *   system(init) -> assistant(chunk)... -> [assistant(complete)] -> tool_call... -> assistant(chunk)... -> result
+ *
+ * With --stream-partial-output the CLI emits incremental assistant chunks
+ * followed by a complete assistant message per turn. The complete message
+ * duplicates the chunks and must be deduplicated by the consumer.
  */
 
 export interface CursorCliSystemInit {
@@ -66,6 +70,12 @@ export function isAssistantMessage(msg: CursorCliMessage): msg is CursorCliAssis
 
 export function isAssistantDelta(msg: CursorCliMessage): msg is CursorCliAssistantMessage {
   return msg.type === "assistant" && typeof (msg as CursorCliAssistantMessage).timestamp_ms === "number";
+}
+
+export function isToolCallMessage(
+  msg: CursorCliMessage
+): msg is CursorCliToolCallStarted | CursorCliToolCallCompleted {
+  return msg.type === "tool_call";
 }
 
 export function isResultMessage(msg: CursorCliMessage): msg is CursorCliResult {
