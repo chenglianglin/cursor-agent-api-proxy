@@ -9,7 +9,11 @@
 
 import { spawn, ChildProcess } from "child_process";
 import { EventEmitter } from "events";
-import type { CursorCliMessage, CursorCliResult } from "../types/cursor-cli.js";
+import type {
+  CursorCliAssistantMessage,
+  CursorCliMessage,
+  CursorCliResult,
+} from "../types/cursor-cli.js";
 import {
   isSystemInit,
   isAssistantMessage,
@@ -23,6 +27,21 @@ const IS_WIN = process.platform === "win32";
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 const DEBUG = !!process.env.CURSOR_DEBUG;
 const LOG_USAGE = !!process.env.CURSOR_PROXY_LOG_USAGE;
+
+/** Cursor CLI may send `message.content: null`, a string, or a parts array. */
+function extractAssistantText(msg: CursorCliAssistantMessage): string {
+  const content = msg.message?.content as unknown;
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter(
+      (c): c is { type: string; text?: string } =>
+        c != null && typeof c === "object" && (c as { type?: string }).type === "text"
+    )
+    .map((c) => (typeof c.text === "string" ? c.text : ""))
+    .join("");
+}
 
 export interface SubprocessOptions {
   model: string;
@@ -167,11 +186,7 @@ export class CursorSubprocess extends EventEmitter {
     }
 
     if (isAssistantMessage(msg)) {
-      const text = msg.message.content
-        .filter((c) => c.type === "text")
-        .map((c) => c.text)
-        .join("");
-
+      const text = extractAssistantText(msg);
       if (!text) return;
 
       if (text === this.turnBuffer) return;

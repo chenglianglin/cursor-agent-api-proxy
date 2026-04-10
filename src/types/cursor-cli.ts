@@ -29,7 +29,8 @@ export interface CursorCliContentPart {
 export interface CursorCliAssistantMessage {
   type: "assistant";
   message: {
-    content: CursorCliContentPart[];
+    /** CLI may omit or set null between turns / tool results. */
+    content?: CursorCliContentPart[] | string | null;
   };
   timestamp_ms?: number;
 }

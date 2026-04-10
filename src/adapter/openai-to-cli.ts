@@ -75,11 +75,13 @@ export function extractModel(model: string): string {
   return "auto";
 }
 
-function messageContentToText(content: string | OpenAIContentPart[]): string {
+function messageContentToText(content: string | OpenAIContentPart[] | null | undefined): string {
+  if (content == null) return "";
   if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
 
   return content
-    .filter((part): part is OpenAIContentPart & { type: "text" } => part.type === "text")
+    .filter((part): part is OpenAIContentPart & { type: "text" } => part?.type === "text")
     .map((part) => part.text ?? "")
     .join("");
 }

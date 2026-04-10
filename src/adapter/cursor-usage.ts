@@ -45,7 +45,8 @@ export function cursorUsageToOpenAI(
   if (!usage) return { ...EMPTY };
 
   const u = usage as Record<string, unknown>;
-  const prompt = Math.max(
+  /** Tokens processed as "new" input (often 0 when the whole prompt hit the prompt cache). */
+  const freshInput = Math.max(
     0,
     num(u.inputTokens) ?? num(u.input_tokens) ?? 0
   );
@@ -53,6 +54,7 @@ export function cursorUsageToOpenAI(
     0,
     num(u.outputTokens) ?? num(u.output_tokens) ?? 0
   );
+  /** Tokens read from Cursor prompt cache (context served from cache). */
   const cached = Math.max(
     0,
     num(u.cacheReadTokens) ??
@@ -61,10 +63,16 @@ export function cursorUsageToOpenAI(
       0
   );
 
+  /**
+   * Cursor splits: `inputTokens` + `cacheReadTokens` ≈ total prompt-side context.
+   * OpenAI-style `prompt_tokens` is clearer as the sum so dashboards don't show 0 when cache is huge.
+   */
+  const promptTotal = freshInput + cached;
+
   const out: OpenAICompletionUsage = {
-    prompt_tokens: prompt,
+    prompt_tokens: promptTotal,
     completion_tokens: completion,
-    total_tokens: prompt + completion,
+    total_tokens: promptTotal + completion,
   };
 
   const cacheWrite = Math.max(
