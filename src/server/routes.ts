@@ -140,7 +140,7 @@ async function handleStreamingResponse(
       isComplete = true;
       if (result.model) lastModel = result.model;
       if (!res.writableEnded) {
-        const done = createDoneChunk(requestId, lastModel);
+        const done = createDoneChunk(requestId, lastModel, result.usage);
         res.write(`data: ${JSON.stringify(done)}\n\n`);
         res.write("data: [DONE]\n\n");
         res.end();
@@ -229,7 +229,8 @@ async function handleNonStreamingResponse(
         const response = createChatResponse(
           requestId,
           finalResult.model || model,
-          finalResult.text
+          finalResult.text,
+          finalResult.usage
         );
         res.json(response);
       } else if (!res.headersSent) {

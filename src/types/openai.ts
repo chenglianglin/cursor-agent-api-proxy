@@ -31,17 +31,23 @@ export interface OpenAIChatResponseChoice {
   finish_reason: "stop" | "length" | null;
 }
 
+/** OpenAI-shaped usage; optional cache detail when sourced from Cursor CLI. */
+export interface OpenAICompletionUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+  };
+}
+
 export interface OpenAIChatResponse {
   id: string;
   object: "chat.completion";
   created: number;
   model: string;
   choices: OpenAIChatResponseChoice[];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  usage: OpenAICompletionUsage;
 }
 
 export interface OpenAIChatChunkDelta {
@@ -61,6 +67,8 @@ export interface OpenAIChatChunk {
   created: number;
   model: string;
   choices: OpenAIChatChunkChoice[];
+  /** Included on final chunk when available (matches OpenAI stream+usage pattern). */
+  usage?: OpenAICompletionUsage;
 }
 
 export interface OpenAIModel {

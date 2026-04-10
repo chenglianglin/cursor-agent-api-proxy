@@ -9,13 +9,15 @@
 
 import { spawn, ChildProcess } from "child_process";
 import { EventEmitter } from "events";
-import type { CursorCliMessage } from "../types/cursor-cli.js";
+import type { CursorCliMessage, CursorCliResult } from "../types/cursor-cli.js";
 import {
   isSystemInit,
   isAssistantMessage,
   isToolCallMessage,
   isResultMessage,
 } from "../types/cursor-cli.js";
+import { cursorUsageToOpenAI } from "../adapter/cursor-usage.js";
+import type { OpenAICompletionUsage } from "../types/openai.js";
 
 const IS_WIN = process.platform === "win32";
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
@@ -35,6 +37,8 @@ export interface ContentDeltaEvent {
 export interface ResultEvent {
   text: string;
   model: string;
+  /** OpenAI-shaped usage when Cursor CLI included `usage` on the result line */
+  usage?: OpenAICompletionUsage;
 }
 
 export class CursorSubprocess extends EventEmitter {
@@ -188,9 +192,11 @@ export class CursorSubprocess extends EventEmitter {
     }
 
     if (isResultMessage(msg)) {
+      const raw = msg as CursorCliResult;
       const result: ResultEvent = {
-        text: msg.result ?? "",
+        text: raw.result ?? "",
         model: this.detectedModel,
+        usage: raw.usage ? cursorUsageToOpenAI(raw.usage) : undefined,
       };
       this.emit("result", result);
       return;

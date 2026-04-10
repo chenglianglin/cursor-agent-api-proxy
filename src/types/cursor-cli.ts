@@ -46,11 +46,25 @@ export interface CursorCliToolCallCompleted {
   tool_call: Record<string, unknown>;
 }
 
+/** Present on newer Cursor CLI `result` lines when usage accounting is available. */
+export interface CursorCliUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
+
 export interface CursorCliResult {
   type: "result";
+  /** e.g. "success" on newer CLIs */
+  subtype?: string;
   result: string;
   duration_ms?: number;
   num_turns?: number;
+  is_error?: boolean;
+  session_id?: string;
+  request_id?: string;
+  usage?: CursorCliUsage;
 }
 
 export type CursorCliMessage =

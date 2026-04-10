@@ -5,6 +5,7 @@
 import type {
   OpenAIChatResponse,
   OpenAIChatChunk,
+  OpenAICompletionUsage,
 } from "../types/openai.js";
 
 export function createStreamChunk(
@@ -33,9 +34,10 @@ export function createStreamChunk(
 
 export function createDoneChunk(
   requestId: string,
-  model: string
+  model: string,
+  usage?: OpenAICompletionUsage
 ): OpenAIChatChunk {
-  return {
+  const chunk: OpenAIChatChunk = {
     id: `chatcmpl-${requestId}`,
     object: "chat.completion.chunk",
     created: Math.floor(Date.now() / 1000),
@@ -48,12 +50,17 @@ export function createDoneChunk(
       },
     ],
   };
+  if (usage) {
+    chunk.usage = usage;
+  }
+  return chunk;
 }
 
 export function createChatResponse(
   requestId: string,
   model: string,
-  text: string
+  text: string,
+  usage?: OpenAICompletionUsage
 ): OpenAIChatResponse {
   return {
     id: `chatcmpl-${requestId}`,
@@ -70,7 +77,7 @@ export function createChatResponse(
         finish_reason: "stop",
       },
     ],
-    usage: {
+    usage: usage ?? {
       prompt_tokens: 0,
       completion_tokens: 0,
       total_tokens: 0,
