@@ -50,9 +50,11 @@ export function createDoneChunk(
       },
     ],
   };
-  if (usage) {
-    chunk.usage = usage;
-  }
+  chunk.usage = usage ?? {
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    total_tokens: 0,
+  };
   return chunk;
 }
 

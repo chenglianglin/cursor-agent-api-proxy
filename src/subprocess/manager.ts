@@ -16,12 +16,13 @@ import {
   isToolCallMessage,
   isResultMessage,
 } from "../types/cursor-cli.js";
-import { cursorUsageToOpenAI } from "../adapter/cursor-usage.js";
+import { cursorUsageToOpenAI, usagePayloadFromResult } from "../adapter/cursor-usage.js";
 import type { OpenAICompletionUsage } from "../types/openai.js";
 
 const IS_WIN = process.platform === "win32";
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 const DEBUG = !!process.env.CURSOR_DEBUG;
+const LOG_USAGE = !!process.env.CURSOR_PROXY_LOG_USAGE;
 
 export interface SubprocessOptions {
   model: string;
@@ -109,6 +110,7 @@ export class CursorSubprocess extends EventEmitter {
           this.clearTimer();
           if (this.buffer.trim()) {
             this.processBuffer();
+            this.flushTrailingLine();
           }
           this.emit("close", code);
         });
@@ -193,14 +195,39 @@ export class CursorSubprocess extends EventEmitter {
 
     if (isResultMessage(msg)) {
       const raw = msg as CursorCliResult;
+      const rawRec = raw as unknown as Record<string, unknown>;
+      const usagePayload = usagePayloadFromResult(rawRec);
+      const usageInfo = usagePayload ? cursorUsageToOpenAI(usagePayload) : undefined;
+      if (LOG_USAGE) {
+        console.error(
+          "[cursor-agent-api-proxy] result usage:",
+          usagePayload ? JSON.stringify(usagePayload) : "(missing — CLI may omit usage for this run)"
+        );
+      }
       const result: ResultEvent = {
         text: raw.result ?? "",
         model: this.detectedModel,
-        usage: raw.usage ? cursorUsageToOpenAI(raw.usage) : undefined,
+        usage: usageInfo,
       };
       this.emit("result", result);
       return;
     }
+  }
+
+  /** Last stdout line may lack trailing \\n; parse it so `result` / usage are not lost. */
+  private flushTrailingLine(): void {
+    const trimmed = this.buffer.trim();
+    if (!trimmed) {
+      this.buffer = "";
+      return;
+    }
+    try {
+      const msg: CursorCliMessage = JSON.parse(trimmed);
+      this.handleMessage(msg);
+    } catch {
+      this.emit("raw", trimmed);
+    }
+    this.buffer = "";
   }
 
   private clearTimer(): void {
