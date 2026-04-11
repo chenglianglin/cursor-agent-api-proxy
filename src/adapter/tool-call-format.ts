@@ -1,5 +1,8 @@
 /**
  * Turn Cursor CLI stream-json `tool_call` events into short text for the client stream.
+ *
+ * Cursor often shapes `tool_call` as: { [toolName]: { args?, result? } }
+ * (see openclaw-cursor-brain streaming-proxy parsing). We also support flat shapes.
  */
 
 function pickString(v: unknown, maxLen: number): string {
@@ -8,7 +11,21 @@ function pickString(v: unknown, maxLen: number): string {
   return s.length <= maxLen ? s : `${s.slice(0, maxLen)}…`;
 }
 
-function toolName(tc: Record<string, unknown>): string {
+/** `{ bash: { args: {...} } }` / `{ read_file: { result: {...} } }` */
+function extractKeyedTool(
+  tc: Record<string, unknown>
+): { name: string; args?: unknown; result?: unknown } | null {
+  for (const [key, val] of Object.entries(tc)) {
+    if (val == null || typeof val !== "object" || Array.isArray(val)) continue;
+    const v = val as Record<string, unknown>;
+    if ("args" in v || "result" in v) {
+      return { name: key, args: v.args, result: v.result };
+    }
+  }
+  return null;
+}
+
+function toolNameFlat(tc: Record<string, unknown>): string {
   const fn = tc.function as Record<string, unknown> | undefined;
   const n =
     tc.name ??
@@ -21,8 +38,7 @@ function toolName(tc: Record<string, unknown>): string {
   return String(n);
 }
 
-/** One-line hint: command, path, or truncated args. */
-function toolDetail(tc: Record<string, unknown>): string {
+function toolDetailFlat(tc: Record<string, unknown>): string {
   const args =
     (tc.args as unknown) ??
     (tc.arguments as unknown) ??
@@ -30,15 +46,15 @@ function toolDetail(tc: Record<string, unknown>): string {
     (tc.params as unknown) ??
     (tc.function as Record<string, unknown> | undefined)?.arguments;
 
-  if (typeof args === "string") return pickString(args, 280);
+  if (typeof args === "string") return pickString(args, 400);
 
   if (args && typeof args === "object" && !Array.isArray(args)) {
     const a = args as Record<string, unknown>;
     const cmd = a.command ?? a.cmd ?? a.shell ?? a.script;
-    if (cmd != null) return pickString(cmd, 280);
+    if (cmd != null) return pickString(cmd, 400);
     const path = a.path ?? a.filePath ?? a.file ?? a.targetPath ?? a.cwd;
-    if (path != null) return pickString(path, 200);
-    return pickString(args, 280);
+    if (path != null) return pickString(path, 300);
+    return pickString(args, 400);
   }
 
   return "";
@@ -60,8 +76,33 @@ export function formatToolCallForStream(
         : subtype
           ? `Tool (${subtype})`
           : "Tool";
-  const name = toolName(toolCall);
-  const detail = toolDetail(toolCall);
-  const body = detail ? `${name}: ${detail}` : name;
+
+  const keyed = extractKeyedTool(toolCall);
+  let body: string;
+
+  if (keyed) {
+    if (subtype === "completed" && keyed.result !== undefined) {
+      const r = keyed.result as Record<string, unknown> | null;
+      const ok =
+        r && typeof r === "object" && "success" in r ? String(r.success) : "";
+      const tail = ok !== "" ? ` success=${ok}` : "";
+      body = `${keyed.name}${tail} ${pickString(keyed.result, 500)}`.trim();
+    } else if (keyed.args !== undefined) {
+      body = `${keyed.name} ${pickString(keyed.args, 600)}`.trim();
+    } else {
+      body = `${keyed.name} ${pickString(toolCall, 600)}`.trim();
+    }
+  } else {
+    const name = toolNameFlat(toolCall);
+    const detail = toolDetailFlat(toolCall);
+    if (detail) {
+      body = `${name}: ${detail}`;
+    } else if (Object.keys(toolCall).length > 0) {
+      body = `${name} ${pickString(toolCall, 700)}`.trim();
+    } else {
+      body = name;
+    }
+  }
+
   return `\n\n*${phase}* ${body}\n\n`;
 }
