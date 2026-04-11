@@ -5,8 +5,13 @@
 import type { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { CursorSubprocess } from "../subprocess/manager.js";
-import type { ContentDeltaEvent, ResultEvent } from "../subprocess/manager.js";
+import type {
+  ContentDeltaEvent,
+  ResultEvent,
+  ToolActivityEvent,
+} from "../subprocess/manager.js";
 import { openaiToCli } from "../adapter/openai-to-cli.js";
+import { formatToolCallForStream } from "../adapter/tool-call-format.js";
 import {
   createStreamChunk,
   createDoneChunk,
@@ -42,6 +47,9 @@ const KNOWN_MODELS = [
   "gemini-3-flash",
   "grok",
 ];
+
+/** When true (default), inject Cursor `tool_call` lines into assistant text so clients can show them. */
+const STREAM_TOOL_ANNOTATIONS = process.env.CURSOR_PROXY_STREAM_TOOLS !== "false";
 
 function extractApiKey(req: Request): string | undefined {
   const auth = req.headers.authorization;
@@ -136,6 +144,15 @@ async function handleStreamingResponse(
       }
     });
 
+    subprocess.on("tool_activity", (ev: ToolActivityEvent) => {
+      if (!STREAM_TOOL_ANNOTATIONS || res.writableEnded) return;
+      const text = formatToolCallForStream(ev.subtype, ev.tool_call);
+      if (!text) return;
+      const chunk = createStreamChunk(requestId, lastModel, text, isFirst);
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      isFirst = false;
+    });
+
     subprocess.on("result", (result: ResultEvent) => {
       isComplete = true;
       if (result.model) lastModel = result.model;
@@ -209,6 +226,13 @@ async function handleNonStreamingResponse(
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     let finalResult: ResultEvent | null = null;
+    let toolAnnotation = "";
+
+    subprocess.on("tool_activity", (ev: ToolActivityEvent) => {
+      if (STREAM_TOOL_ANNOTATIONS) {
+        toolAnnotation += formatToolCallForStream(ev.subtype, ev.tool_call);
+      }
+    });
 
     subprocess.on("result", (result: ResultEvent) => {
       finalResult = result;
@@ -229,7 +253,7 @@ async function handleNonStreamingResponse(
         const response = createChatResponse(
           requestId,
           finalResult.model || model,
-          finalResult.text,
+          toolAnnotation + finalResult.text,
           finalResult.usage
         );
         res.json(response);

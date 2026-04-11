@@ -61,6 +61,11 @@ export interface ResultEvent {
   usage?: OpenAICompletionUsage;
 }
 
+export interface ToolActivityEvent {
+  subtype?: string;
+  tool_call: Record<string, unknown>;
+}
+
 export class CursorSubprocess extends EventEmitter {
   private process: ChildProcess | null = null;
   private buffer = "";
@@ -205,6 +210,11 @@ export class CursorSubprocess extends EventEmitter {
 
     if (isToolCallMessage(msg)) {
       this.turnBuffer = "";
+      const tc = msg as { subtype?: string; tool_call?: Record<string, unknown> };
+      this.emit("tool_activity", {
+        subtype: tc.subtype,
+        tool_call: tc.tool_call && typeof tc.tool_call === "object" ? tc.tool_call : {},
+      } satisfies ToolActivityEvent);
       return;
     }
 
