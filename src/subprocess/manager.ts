@@ -9,6 +9,7 @@
 
 import { spawn, ChildProcess } from "child_process";
 import { EventEmitter } from "events";
+import { StringDecoder } from "node:string_decoder";
 import type {
   CursorCliAssistantMessage,
   CursorCliMessage,
@@ -69,6 +70,8 @@ export interface ToolActivityEvent {
 export class CursorSubprocess extends EventEmitter {
   private process: ChildProcess | null = null;
   private buffer = "";
+  /** Must decode stdout as a stream; per-chunk toString("utf8") breaks CJK split across chunks. */
+  private stdoutDecoder: StringDecoder | null = null;
   private timeoutId: NodeJS.Timeout | null = null;
   private isKilled = false;
   private detectedModel = "cursor-auto";
@@ -80,6 +83,9 @@ export class CursorSubprocess extends EventEmitter {
 
     return new Promise<void>((resolve, reject) => {
       try {
+        this.stdoutDecoder = new StringDecoder("utf8");
+        this.buffer = "";
+
         const env = { ...process.env };
         if (options.apiKey) {
           env.CURSOR_API_KEY = options.apiKey;
@@ -119,12 +125,14 @@ export class CursorSubprocess extends EventEmitter {
         this.process.stdin?.end();
 
         this.process.stdout?.on("data", (chunk: Buffer) => {
-          this.buffer += chunk.toString("utf8");
+          if (this.stdoutDecoder) {
+            this.buffer += this.stdoutDecoder.write(chunk);
+          }
           this.processBuffer();
         });
 
         this.process.stderr?.on("data", (chunk: Buffer) => {
-          const text = chunk.toString().trim();
+          const text = chunk.toString("utf8").trim();
           if (text) {
             console.error("[CursorSubprocess stderr]", text.slice(0, 500));
           }
@@ -132,6 +140,11 @@ export class CursorSubprocess extends EventEmitter {
 
         this.process.on("close", (code) => {
           this.clearTimer();
+          if (this.stdoutDecoder) {
+            const tail = this.stdoutDecoder.end();
+            this.stdoutDecoder = null;
+            if (tail) this.buffer += tail;
+          }
           if (this.buffer.trim()) {
             this.processBuffer();
             this.flushTrailingLine();
