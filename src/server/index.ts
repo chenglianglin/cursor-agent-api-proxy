@@ -24,6 +24,16 @@ export async function startServer(
 
   app.use(express.json({ limit: "10mb" }));
 
+  /** Default JSON responses as UTF-8 so clients don’t mis-decode CJK text. */
+  app.use((_req, res, next) => {
+    const origJson = res.json.bind(res);
+    res.json = (body: unknown) => {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      return origJson(body);
+    };
+    next();
+  });
+
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader(

@@ -60,6 +60,46 @@ function toolDetailFlat(tc: Record<string, unknown>): string {
   return "";
 }
 
+/** Cursor `result` may be `{ error }`, `{ success: boolean }`, or `{ success: { content, errorMessage } }`. */
+function summarizeToolCompletedResult(result: unknown, toolName: string): string {
+  if (result == null) return toolName;
+  if (typeof result !== "object" || Array.isArray(result)) {
+    return `${toolName} ${pickString(result, 400)}`.trim();
+  }
+
+  const r = result as Record<string, unknown>;
+
+  const err = r.error;
+  if (err != null) {
+    if (typeof err === "object" && err !== null && !Array.isArray(err)) {
+      const em = (err as Record<string, unknown>).errorMessage;
+      if (typeof em === "string") return `${toolName} error: ${em}`;
+    }
+    return `${toolName} error: ${pickString(err, 300)}`.trim();
+  }
+
+  if (!("success" in r)) {
+    return `${toolName} ${pickString(r, 500)}`.trim();
+  }
+
+  const s = r.success;
+  if (typeof s === "boolean") {
+    return `${toolName} ok=${s}`.trim();
+  }
+  if (s != null && typeof s === "object" && !Array.isArray(s)) {
+    const p = s as Record<string, unknown>;
+    if (typeof p.errorMessage === "string") {
+      return `${toolName} error: ${p.errorMessage}`.trim();
+    }
+    if (typeof p.content === "string") {
+      return `${toolName} ${pickString(p.content, 450)}`.trim();
+    }
+    return `${toolName} ok`.trim();
+  }
+
+  return `${toolName} ${pickString(s, 200)}`.trim();
+}
+
 /**
  * Human-readable line(s) injected into assistant text so OpenAI clients show tool activity.
  * Set CURSOR_PROXY_STREAM_TOOLS=false to disable forwarding (subprocess still parses events).
@@ -81,12 +121,8 @@ export function formatToolCallForStream(
   let body: string;
 
   if (keyed) {
-    if (subtype === "completed" && keyed.result !== undefined) {
-      const r = keyed.result as Record<string, unknown> | null;
-      const ok =
-        r && typeof r === "object" && "success" in r ? String(r.success) : "";
-      const tail = ok !== "" ? ` success=${ok}` : "";
-      body = `${keyed.name}${tail} ${pickString(keyed.result, 500)}`.trim();
+    if (subtype === "completed") {
+      body = summarizeToolCompletedResult(keyed.result, keyed.name);
     } else if (keyed.args !== undefined) {
       body = `${keyed.name} ${pickString(keyed.args, 600)}`.trim();
     } else {

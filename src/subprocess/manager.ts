@@ -119,7 +119,7 @@ export class CursorSubprocess extends EventEmitter {
         this.process.stdin?.end();
 
         this.process.stdout?.on("data", (chunk: Buffer) => {
-          this.buffer += chunk.toString();
+          this.buffer += chunk.toString("utf8");
           this.processBuffer();
         });
 
