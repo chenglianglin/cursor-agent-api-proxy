@@ -56,10 +56,14 @@ const KNOWN_MODELS = [
 const STREAM_TOOL_ANNOTATIONS = process.env.CURSOR_PROXY_STREAM_TOOLS !== "false";
 
 /**
- * When true (default), emit OpenAI-style `choices[].delta.tool_calls` on Cursor tool starts so OpenClaw's `processOpenAICompletionsStream` can build native tool blocks. For OpenClaw Web UI,
- * set `CURSOR_PROXY_STREAM_TOOLS=false` to avoid duplicating tools as markdown + cards.
+ * Emit OpenAI-style `choices[].delta.tool_calls` chunks.  Defaults to **OFF** because
+ * Cursor CLI already executes tools internally; emitting `tool_calls` causes downstream
+ * agents (e.g. OpenClaw) to attempt re-execution → "Tool xxx not found".
+ *
+ * Only enable when the consumer is a **passive SSE viewer** that renders tool cards
+ * without its own agent loop (set `CURSOR_PROXY_OPENCLAW_TOOLS=true`).
  */
-const EMIT_OPENAI_TOOL_DELTAS = process.env.CURSOR_PROXY_OPENCLAW_TOOLS !== "false";
+const EMIT_OPENAI_TOOL_DELTAS = process.env.CURSOR_PROXY_OPENCLAW_TOOLS === "true";
 
 function pickOpenAiToolCallId(toolCall: Record<string, unknown>): string {
   for (const key of ["id", "tool_call_id", "callId", "toolCallId"] as const) {
