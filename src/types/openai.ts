@@ -22,13 +22,24 @@ export interface OpenAIChatRequest {
   user?: string;
 }
 
+/** One streaming delta item for `choices[].delta.tool_calls` (OpenAI chat completions). */
+export interface OpenAIStreamToolCallDelta {
+  index: number;
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
 export interface OpenAIChatResponseChoice {
   index: number;
   message: {
     role: "assistant";
     content: string;
   };
-  finish_reason: "stop" | "length" | null;
+  finish_reason: "stop" | "length" | "tool_calls" | null;
 }
 
 /** OpenAI-shaped usage; optional cache detail when sourced from Cursor CLI. */
@@ -53,12 +64,13 @@ export interface OpenAIChatResponse {
 export interface OpenAIChatChunkDelta {
   role?: "assistant";
   content?: string;
+  tool_calls?: OpenAIStreamToolCallDelta[];
 }
 
 export interface OpenAIChatChunkChoice {
   index: number;
   delta: OpenAIChatChunkDelta;
-  finish_reason: "stop" | "length" | null;
+  finish_reason: "stop" | "length" | "tool_calls" | null;
 }
 
 export interface OpenAIChatChunk {

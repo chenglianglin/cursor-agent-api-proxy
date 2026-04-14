@@ -104,6 +104,68 @@ function summarizeToolCompletedResult(result: unknown, toolName: string): string
  * Human-readable line(s) injected into assistant text so OpenAI clients show tool activity.
  * Set CURSOR_PROXY_STREAM_TOOLS=false to disable forwarding (subprocess still parses events).
  */
+function coerceArgumentsRecord(args: unknown): Record<string, unknown> {
+  if (args == null) {
+    return {};
+  }
+  if (typeof args === "string") {
+    const t = args.trim();
+    if (!t) {
+      return {};
+    }
+    try {
+      const parsed = JSON.parse(t) as unknown;
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return { value: parsed as unknown };
+    } catch {
+      return { raw: args };
+    }
+  }
+  if (typeof args === "object" && !Array.isArray(args)) {
+    return { ...(args as Record<string, unknown>) };
+  }
+  return { value: args as unknown };
+}
+
+/**
+ * Map Cursor CLI `tool_call` payload → OpenAI function name + arguments object * for `choices[].delta.tool_calls[].function.{name,arguments}` (arguments JSON-stringified on the wire).
+ */
+export function resolveCursorToolForOpenAi(
+  toolCall: Record<string, unknown>
+): { name: string; arguments: Record<string, unknown> } | null {
+  const keyed = extractKeyedTool(toolCall);
+  if (keyed) {
+    const name = keyed.name?.trim();
+    if (!name) {
+      return null;
+    }
+    return {
+      name,
+      arguments: coerceArgumentsRecord(keyed.args),
+    };
+  }
+
+  const name = toolNameFlat(toolCall).trim();
+  if (!name || name === "tool") {
+    return null;
+  }
+
+  const fn = toolCall.function as Record<string, unknown> | undefined;
+  const argsRaw =
+    toolCall.args ??
+    toolCall.arguments ??
+    toolCall.input ??
+    toolCall.params ??
+    fn?.arguments;
+
+  return {
+    name,
+    arguments: coerceArgumentsRecord(argsRaw),
+  };
+}
+
 export function formatToolCallForStream(
   subtype: string | undefined,
   toolCall: Record<string, unknown>

@@ -11,9 +11,13 @@ import type {
   ToolActivityEvent,
 } from "../subprocess/manager.js";
 import { openaiToCli } from "../adapter/openai-to-cli.js";
-import { formatToolCallForStream } from "../adapter/tool-call-format.js";
+import {
+  formatToolCallForStream,
+  resolveCursorToolForOpenAi,
+} from "../adapter/tool-call-format.js";
 import {
   createStreamChunk,
+  createToolCallsStreamChunk,
   createDoneChunk,
   createChatResponse,
 } from "../adapter/cli-to-openai.js";
@@ -50,6 +54,22 @@ const KNOWN_MODELS = [
 
 /** When true (default), inject Cursor `tool_call` lines into assistant text so clients can show them. */
 const STREAM_TOOL_ANNOTATIONS = process.env.CURSOR_PROXY_STREAM_TOOLS !== "false";
+
+/**
+ * When true (default), emit OpenAI-style `choices[].delta.tool_calls` on Cursor tool starts so OpenClaw's `processOpenAICompletionsStream` can build native tool blocks. For OpenClaw Web UI,
+ * set `CURSOR_PROXY_STREAM_TOOLS=false` to avoid duplicating tools as markdown + cards.
+ */
+const EMIT_OPENAI_TOOL_DELTAS = process.env.CURSOR_PROXY_OPENCLAW_TOOLS !== "false";
+
+function pickOpenAiToolCallId(toolCall: Record<string, unknown>): string {
+  for (const key of ["id", "tool_call_id", "callId", "toolCallId"] as const) {
+    const v = toolCall[key];
+    if (typeof v === "string" && v.trim()) {
+      return v.trim();
+    }
+  }
+  return `call_${uuidv4().replace(/-/g, "")}`;
+}
 
 function extractApiKey(req: Request): string | undefined {
   const auth = req.headers.authorization;
@@ -130,6 +150,7 @@ async function handleStreamingResponse(
     let isFirst = true;
     let lastModel = model;
     let isComplete = false;
+    let toolCallStreamIndex = 0;
 
     res.on("close", () => {
       if (!isComplete) subprocess.kill();
@@ -145,7 +166,36 @@ async function handleStreamingResponse(
     });
 
     subprocess.on("tool_activity", (ev: ToolActivityEvent) => {
-      if (!STREAM_TOOL_ANNOTATIONS || res.writableEnded) return;
+      if (res.writableEnded) return;
+
+      const isStart = ev.subtype !== "completed";
+      if (EMIT_OPENAI_TOOL_DELTAS && isStart) {
+        const resolved = resolveCursorToolForOpenAi(ev.tool_call);
+        if (resolved) {
+          const id = pickOpenAiToolCallId(ev.tool_call);
+          let argsJson: string;
+          try {
+            argsJson = JSON.stringify(resolved.arguments);
+          } catch {
+            argsJson = "{}";
+          }
+          const deltaItem = {
+            index: toolCallStreamIndex,
+            id,
+            type: "function" as const,
+            function: {
+              name: resolved.name,
+              arguments: argsJson,
+            },
+          };
+          toolCallStreamIndex += 1;
+          const chunk = createToolCallsStreamChunk(requestId, lastModel, [deltaItem], isFirst);
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+          isFirst = false;
+        }
+      }
+
+      if (!STREAM_TOOL_ANNOTATIONS) return;
       const text = formatToolCallForStream(ev.subtype, ev.tool_call);
       if (!text) return;
       const chunk = createStreamChunk(requestId, lastModel, text, isFirst);

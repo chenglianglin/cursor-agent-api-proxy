@@ -6,6 +6,7 @@ import type {
   OpenAIChatResponse,
   OpenAIChatChunk,
   OpenAICompletionUsage,
+  OpenAIStreamToolCallDelta,
 } from "../types/openai.js";
 
 export function createStreamChunk(
@@ -32,10 +33,39 @@ export function createStreamChunk(
   };
 }
 
+/**
+ * OpenClaw (and other OpenAI clients) consume `delta.tool_calls` to build native tool cards.
+ * Each Cursor `tool_call` (started) should map to one delta item with a stable `index`.
+ */
+export function createToolCallsStreamChunk(
+  requestId: string,
+  model: string,
+  toolCalls: OpenAIStreamToolCallDelta[],
+  isFirst: boolean
+): OpenAIChatChunk {
+  return {
+    id: `chatcmpl-${requestId}`,
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [
+      {
+        index: 0,
+        delta: {
+          ...(isFirst ? { role: "assistant" as const } : {}),
+          tool_calls: toolCalls,
+        },
+        finish_reason: null,
+      },
+    ],
+  };
+}
+
 export function createDoneChunk(
   requestId: string,
   model: string,
-  usage?: OpenAICompletionUsage
+  usage?: OpenAICompletionUsage,
+  finishReason: "stop" | "tool_calls" = "stop"
 ): OpenAIChatChunk {
   const chunk: OpenAIChatChunk = {
     id: `chatcmpl-${requestId}`,
@@ -46,7 +76,7 @@ export function createDoneChunk(
       {
         index: 0,
         delta: {},
-        finish_reason: "stop",
+        finish_reason: finishReason,
       },
     ],
   };
