@@ -7,38 +7,20 @@ import type { OpenAIChatMessage, OpenAIChatRequest, OpenAIContentPart } from "..
 
 const KNOWN_CURSOR_MODELS = new Set([
   "auto",
-  "composer-1.5",
-  "composer-1",
+  "composer-2-fast",
+  "composer-2",
   "gpt-5.3-codex",
-  "gpt-5.3-codex-low",
-  "gpt-5.3-codex-high",
-  "gpt-5.3-codex-xhigh",
   "gpt-5.3-codex-fast",
-  "gpt-5.3-codex-low-fast",
+  "gpt-5.3-codex-high",
   "gpt-5.3-codex-high-fast",
+  "gpt-5.3-codex-xhigh",
   "gpt-5.3-codex-xhigh-fast",
-  "gpt-5.2",
-  "gpt-5.2-codex",
-  "gpt-5.2-codex-high",
-  "gpt-5.2-codex-low",
-  "gpt-5.2-codex-xhigh",
-  "gpt-5.2-codex-fast",
-  "gpt-5.2-codex-high-fast",
-  "gpt-5.2-codex-low-fast",
-  "gpt-5.2-codex-xhigh-fast",
-  "gpt-5.1-codex-max",
-  "gpt-5.1-codex-max-high",
-  "opus-4.6-thinking",
-  "sonnet-4.5-thinking",
-  "gpt-5.2-high",
-  "opus-4.6",
-  "opus-4.5",
-  "opus-4.5-thinking",
-  "sonnet-4.5",
-  "gpt-5.1-high",
+  "claude-4.5-opus-high",
+  "claude-4.5-opus-high-thinking",
+  "claude-4.5-sonnet",
+  "claude-4.5-sonnet-thinking",
   "gemini-3-pro",
-  "gemini-3-flash",
-  "grok",
+  "gemini-3-flash"
 ]);
 
 export interface CliInput {
@@ -56,8 +38,10 @@ export interface CliInput {
  *   "opus-4.6-thinking"   -> "opus-4.6-thinking"
  */
 export function extractModel(model: string): string {
-  if (model.startsWith("cursor/")) {
-    return model.slice("cursor/".length) || "auto";
+  for (const prefix of ["cursor-local/", "cursor/"]) {
+    if (model.startsWith(prefix)) {
+      return model.slice(prefix.length) || "auto";
+    }
   }
 
   if (model.startsWith("cursor-")) {
@@ -69,6 +53,12 @@ export function extractModel(model: string): string {
   }
 
   if (KNOWN_CURSOR_MODELS.has(model)) {
+    return model;
+  }
+
+  // Unknown model name without any prefix: pass through as-is.
+  // Cursor CLI will reject it if unsupported; avoids silent fallback to "auto".
+  if (model && model !== "auto") {
     return model;
   }
 

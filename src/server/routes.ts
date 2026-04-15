@@ -25,31 +25,20 @@ import type { OpenAIChatRequest } from "../types/openai.js";
 
 const KNOWN_MODELS = [
   "auto",
-  "composer-1.5",
-  "composer-1",
-  "opus-4.6-thinking",
-  "opus-4.6",
-  "opus-4.5-thinking",
-  "opus-4.5",
-  "sonnet-4.5-thinking",
-  "sonnet-4.5",
+  "composer-2-fast",
+  "composer-2",
   "gpt-5.3-codex",
   "gpt-5.3-codex-fast",
-  "gpt-5.3-codex-low",
-  "gpt-5.3-codex-low-fast",
   "gpt-5.3-codex-high",
   "gpt-5.3-codex-high-fast",
   "gpt-5.3-codex-xhigh",
   "gpt-5.3-codex-xhigh-fast",
-  "gpt-5.3-codex-spark-preview",
-  "gpt-5.2",
-  "gpt-5.2-codex",
-  "gpt-5.2-codex-low",
-  "gpt-5.2-codex-low-fast",
-  "gpt-5.1-codex-max",
+  "claude-4.5-opus-high",
+  "claude-4.5-opus-high-thinking",
+  "claude-4.5-sonnet",
+  "claude-4.5-sonnet-thinking",
   "gemini-3-pro",
-  "gemini-3-flash",
-  "grok",
+  "gemini-3-flash"
 ];
 
 /** When true (default), inject Cursor `tool_call` lines into assistant text so clients can show them. */
