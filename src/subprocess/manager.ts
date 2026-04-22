@@ -166,6 +166,7 @@ export class CursorSubprocess extends EventEmitter {
       "--output-format",
       "stream-json",
       "--stream-partial-output",
+      "--resume",
       "--yolo",
     ];
 
