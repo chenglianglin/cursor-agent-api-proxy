@@ -25,7 +25,8 @@ import { cursorUsageToOpenAI, usagePayloadFromResult } from "../adapter/cursor-u
 import type { OpenAICompletionUsage } from "../types/openai.js";
 
 const IS_WIN = process.platform === "win32";
-const DEFAULT_TIMEOUT = 300_000; // 5 minutes
+const _envTimeout = parseInt(process.env.CURSOR_PROXY_TIMEOUT_MS ?? "", 10);
+const DEFAULT_TIMEOUT = Number.isFinite(_envTimeout) && _envTimeout > 0 ? _envTimeout : 300_000;
 const DEBUG = !!process.env.CURSOR_DEBUG;
 const LOG_USAGE = !!process.env.CURSOR_PROXY_LOG_USAGE;
 
