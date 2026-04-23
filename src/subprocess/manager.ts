@@ -27,8 +27,9 @@ import type { OpenAICompletionUsage } from "../types/openai.js";
 const IS_WIN = process.platform === "win32";
 const _envTimeout = parseInt(process.env.CURSOR_PROXY_TIMEOUT_MS ?? "", 10);
 const DEFAULT_TIMEOUT = Number.isFinite(_envTimeout) && _envTimeout > 0 ? _envTimeout : 300_000;
-const DEBUG = !!process.env.CURSOR_DEBUG;
-const LOG_USAGE = !!process.env.CURSOR_PROXY_LOG_USAGE;
+const _falsyValues = new Set(["0", "false", "no", "off", ""]);
+const DEBUG = !_falsyValues.has((process.env.CURSOR_DEBUG ?? "").toLowerCase());
+const LOG_USAGE = !_falsyValues.has((process.env.CURSOR_PROXY_LOG_USAGE ?? "").toLowerCase());
 
 /** Cursor CLI may send `message.content: null`, a string, or a parts array. */
 function extractAssistantText(msg: CursorCliAssistantMessage): string {
