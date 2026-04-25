@@ -75,6 +75,7 @@ export class CursorSubprocess extends EventEmitter {
   /** Must decode stdout as a stream; per-chunk toString("utf8") breaks CJK split across chunks. */
   private stdoutDecoder: StringDecoder | null = null;
   private timeoutId: NodeJS.Timeout | null = null;
+  private killGraceTimer: NodeJS.Timeout | null = null;
   private isKilled = false;
   private detectedModel = "cursor-auto";
   private turnBuffer = "";
@@ -98,12 +99,15 @@ export class CursorSubprocess extends EventEmitter {
           env,
           stdio: ["pipe", "pipe", "pipe"],
           shell: IS_WIN,
+          // POSIX: start a new process group so timeout/client-close cleanup can
+          // terminate Cursor's tool subprocesses, not only the top-level agent.
+          detached: !IS_WIN,
         });
 
         this.timeoutId = setTimeout(() => {
           if (!this.isKilled) {
             this.isKilled = true;
-            this.process?.kill(IS_WIN ? undefined : "SIGTERM");
+            this.terminateProcessTree("SIGTERM");
             this.emit("error", new Error(`Request timed out after ${timeout}ms`));
           }
         }, timeout);
@@ -142,6 +146,7 @@ export class CursorSubprocess extends EventEmitter {
 
         this.process.on("close", (code) => {
           this.clearTimer();
+          this.clearKillGraceTimer();
           if (this.stdoutDecoder) {
             const tail = this.stdoutDecoder.end();
             this.stdoutDecoder = null;
@@ -277,15 +282,48 @@ export class CursorSubprocess extends EventEmitter {
     }
   }
 
+  private clearKillGraceTimer(): void {
+    if (this.killGraceTimer) {
+      clearTimeout(this.killGraceTimer);
+      this.killGraceTimer = null;
+    }
+  }
+
+  private sendSignal(signal: NodeJS.Signals): void {
+    const child = this.process;
+    if (!child?.pid) {
+      return;
+    }
+    try {
+      if (IS_WIN) {
+        child.kill(signal);
+      } else {
+        process.kill(-child.pid, signal);
+      }
+    } catch (err) {
+      const code = (err as { code?: unknown }).code;
+      if (code !== "ESRCH") {
+        console.error(`[CursorSubprocess] failed to send ${signal}:`, err);
+      }
+    }
+  }
+
+  private terminateProcessTree(signal: NodeJS.Signals): void {
+    this.sendSignal(signal);
+    if (!IS_WIN && signal !== "SIGKILL" && !this.killGraceTimer) {
+      this.killGraceTimer = setTimeout(() => {
+        this.killGraceTimer = null;
+        this.sendSignal("SIGKILL");
+      }, 5_000);
+      this.killGraceTimer.unref?.();
+    }
+  }
+
   kill(): void {
     if (!this.isKilled && this.process) {
       this.isKilled = true;
       this.clearTimer();
-      if (IS_WIN) {
-        this.process.kill();
-      } else {
-        this.process.kill("SIGTERM");
-      }
+      this.terminateProcessTree("SIGTERM");
     }
   }
 
