@@ -99,9 +99,6 @@ export class CursorSubprocess extends EventEmitter {
           env,
           stdio: ["pipe", "pipe", "pipe"],
           shell: IS_WIN,
-          // POSIX: start a new process group so timeout/client-close cleanup can
-          // terminate Cursor's tool subprocesses, not only the top-level agent.
-          detached: !IS_WIN,
         });
 
         this.timeoutId = setTimeout(() => {
@@ -291,15 +288,11 @@ export class CursorSubprocess extends EventEmitter {
 
   private sendSignal(signal: NodeJS.Signals): void {
     const child = this.process;
-    if (!child?.pid) {
+    if (!child) {
       return;
     }
     try {
-      if (IS_WIN) {
-        child.kill(signal);
-      } else {
-        process.kill(-child.pid, signal);
-      }
+      child.kill(signal);
     } catch (err) {
       const code = (err as { code?: unknown }).code;
       if (code !== "ESRCH") {
