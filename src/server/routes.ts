@@ -205,11 +205,8 @@ async function handleStreamingResponse(
         res.write("data: [DONE]\n\n");
         res.end();
       }
-      // Cursor CLI can leave tool helper processes alive after emitting the final
-      // result. Terminate the process group now that the response is complete so
-      // helper parents can exit and reap any defunct children.
-      subprocess.kill();
-      resolve();
+      // Let agent exit naturally so it can waitpid() its own children before
+      // dying — avoids orphan zombies. close event below will resolve().
     });
 
     subprocess.on("error", (error: Error) => {
@@ -283,9 +280,8 @@ async function handleNonStreamingResponse(
 
     subprocess.on("result", (result: ResultEvent) => {
       finalResult = result;
-      // We have the final payload; ask the process group to exit instead of
-      // waiting for lingering Cursor/tool helpers to close on their own.
-      subprocess.kill();
+      // Let agent exit naturally so it can waitpid() its own children before
+      // dying — avoids orphan zombies. close event below sends the response.
     });
 
     subprocess.on("error", (error: Error) => {
