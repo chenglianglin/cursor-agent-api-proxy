@@ -28,6 +28,17 @@ export interface CliInput {
   model: string;
 }
 
+function resolveCliModel(name: string): string {
+  if (!name || name === "auto") {
+    return "auto";
+  }
+  if (KNOWN_CURSOR_MODELS.has(name)) {
+    return name;
+  }
+  console.error(`[openai-to-cli] Unknown model "${name}", falling back to "auto"`);
+  return "auto";
+}
+
 /**
  * Resolve the Cursor CLI model name from an OpenAI-style model string.
  *
@@ -36,33 +47,22 @@ export interface CliInput {
  *   "cursor-opus-4.6"     -> "opus-4.6"
  *   "auto"                -> "auto"
  *   "opus-4.6-thinking"   -> "opus-4.6-thinking"
+ *
+ * Unknown model names fall back to "auto" so Cursor CLI is not called with
+ * invalid IDs (e.g. OpenAI-style names like "gpt-5.4-mini").
  */
 export function extractModel(model: string): string {
   for (const prefix of ["cursor-local/", "cursor/"]) {
     if (model.startsWith(prefix)) {
-      return model.slice(prefix.length) || "auto";
+      return resolveCliModel(model.slice(prefix.length));
     }
   }
 
   if (model.startsWith("cursor-")) {
-    const remainder = model.slice("cursor-".length);
-    if (remainder && KNOWN_CURSOR_MODELS.has(remainder)) {
-      return remainder;
-    }
-    if (remainder) return remainder;
+    return resolveCliModel(model.slice("cursor-".length));
   }
 
-  if (KNOWN_CURSOR_MODELS.has(model)) {
-    return model;
-  }
-
-  // Unknown model name without any prefix: pass through as-is.
-  // Cursor CLI will reject it if unsupported; avoids silent fallback to "auto".
-  if (model && model !== "auto") {
-    return model;
-  }
-
-  return "auto";
+  return resolveCliModel(model);
 }
 
 function messageContentToText(content: string | OpenAIContentPart[] | null | undefined): string {
