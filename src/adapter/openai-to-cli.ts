@@ -7,20 +7,20 @@ import type { OpenAIChatMessage, OpenAIChatRequest, OpenAIContentPart } from "..
 
 const KNOWN_CURSOR_MODELS = new Set([
   "auto",
-  "composer-2-fast",
-  "composer-2",
+  "composer-2.5-fast",
+  "composer-2.5",
+  "gpt-5.4-mini-low",
+  "gpt-5.4-mini-medium",
+  "gpt-5.4-mini-high",
+  "gpt-5.4-xhigh",
+  "gpt-5.4-xhigh-fast",
   "gpt-5.3-codex",
   "gpt-5.3-codex-fast",
-  "gpt-5.3-codex-high",
   "gpt-5.3-codex-high-fast",
-  "gpt-5.3-codex-xhigh",
-  "gpt-5.3-codex-xhigh-fast",
-  "claude-4.5-opus-high",
-  "claude-4.5-opus-high-thinking",
-  "claude-4.5-sonnet",
-  "claude-4.5-sonnet-thinking",
-  "gemini-3-pro",
-  "gemini-3-flash"
+  "claude-4.6-opus-high-thinking",
+  "claude-4.6-sonnet-medium-thinking",
+  "gemini-3.1-pro",
+  "gemini-3.5-flash"
 ]);
 
 export interface CliInput {
