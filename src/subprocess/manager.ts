@@ -51,6 +51,8 @@ export interface SubprocessOptions {
   apiKey?: string;
   cwd?: string;
   timeout?: number;
+  /** Resume an existing Cursor CLI chat session. */
+  sessionId?: string;
 }
 
 export interface ContentDeltaEvent {
@@ -60,6 +62,8 @@ export interface ContentDeltaEvent {
 export interface ResultEvent {
   text: string;
   model: string;
+  /** Cursor CLI session id when reported by init/result lines */
+  sessionId?: string;
   /** OpenAI-shaped usage when Cursor CLI included `usage` on the result line */
   usage?: OpenAICompletionUsage;
 }
@@ -78,6 +82,7 @@ export class CursorSubprocess extends EventEmitter {
   private killGraceTimer: NodeJS.Timeout | null = null;
   private isKilled = false;
   private detectedModel = "cursor-auto";
+  private sessionId: string | undefined;
   private turnBuffer = "";
 
   async start(prompt: string, options: SubprocessOptions): Promise<void> {
@@ -177,6 +182,10 @@ export class CursorSubprocess extends EventEmitter {
       args.push("--model", options.model);
     }
 
+    if (options.sessionId) {
+      args.push("--resume", options.sessionId);
+    }
+
     return args;
   }
 
@@ -204,6 +213,10 @@ export class CursorSubprocess extends EventEmitter {
 
     if (isSystemInit(msg)) {
       if (msg.model) this.detectedModel = msg.model;
+      if (msg.session_id) {
+        this.sessionId = msg.session_id;
+        this.emit("session_init", { sessionId: msg.session_id });
+      }
       return;
     }
 
@@ -246,9 +259,11 @@ export class CursorSubprocess extends EventEmitter {
           usagePayload ? JSON.stringify(usagePayload) : "(missing — CLI may omit usage for this run)"
         );
       }
+      if (raw.session_id) this.sessionId = raw.session_id;
       const result: ResultEvent = {
         text: raw.result ?? "",
         model: this.detectedModel,
+        sessionId: this.sessionId,
         usage: usageInfo,
       };
       this.emit("result", result);

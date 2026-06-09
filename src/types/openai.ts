@@ -20,6 +20,8 @@ export interface OpenAIChatRequest {
   temperature?: number;
   max_tokens?: number;
   user?: string;
+  /** Resume an existing Cursor CLI session (proxy extension). */
+  session_id?: string;
 }
 
 /** One streaming delta item for `choices[].delta.tool_calls` (OpenAI chat completions). */
@@ -59,6 +61,19 @@ export interface OpenAIChatResponse {
   model: string;
   choices: OpenAIChatResponseChoice[];
   usage: OpenAICompletionUsage;
+  /** Cursor CLI session id (proxy extension). */
+  session_id?: string;
+}
+
+export interface CursorSessionListItem {
+  id: string;
+  updated_at: string;
+  workspace: string;
+}
+
+export interface CursorSessionList {
+  object: "list";
+  data: CursorSessionListItem[];
 }
 
 export interface OpenAIChatChunkDelta {

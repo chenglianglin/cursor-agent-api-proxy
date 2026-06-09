@@ -22,6 +22,14 @@ import {
   createChatResponse,
 } from "../adapter/cli-to-openai.js";
 import type { OpenAIChatRequest } from "../types/openai.js";
+import { listSessions } from "../session/list.js";
+import {
+  formatSessionLog,
+  persistSessionMapping,
+  resolveSession,
+  type ResolvedSession,
+} from "../session/map.js";
+import type { SubprocessOptions } from "../subprocess/manager.js";
 
 const KNOWN_MODELS = [
   "auto",
@@ -101,16 +109,36 @@ export async function handleChatCompletions(
 
     const { prompt, model } = openaiToCli(body);
     const apiKey = extractApiKey(req);
+    const sessionCtx = await resolveSession(req, body);
+    const subprocessOpts: SubprocessOptions = {
+      model,
+      apiKey,
+      sessionId: sessionCtx.sessionId,
+    };
     console.error(
-      `[chat] id=${requestId} model=${body.model} -> cli_model=${model} stream=${stream}`
+      `[chat] id=${requestId} model=${body.model} -> cli_model=${model} stream=${stream} session=${formatSessionLog(sessionCtx)}`
     );
 
     const subprocess = new CursorSubprocess();
 
     if (stream) {
-      await handleStreamingResponse(res, subprocess, prompt, model, requestId, apiKey);
+      await handleStreamingResponse(
+        res,
+        subprocess,
+        prompt,
+        requestId,
+        subprocessOpts,
+        sessionCtx
+      );
     } else {
-      await handleNonStreamingResponse(res, subprocess, prompt, model, requestId, apiKey);
+      await handleNonStreamingResponse(
+        res,
+        subprocess,
+        prompt,
+        requestId,
+        subprocessOpts,
+        sessionCtx
+      );
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -127,30 +155,44 @@ async function handleStreamingResponse(
   res: Response,
   subprocess: CursorSubprocess,
   prompt: string,
-  model: string,
   requestId: string,
-  apiKey?: string
+  opts: SubprocessOptions,
+  sessionCtx: ResolvedSession
 ): Promise<void> {
+  const model = opts.model;
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Request-Id", requestId);
-  res.flushHeaders();
-
-  res.write(":ok\n\n");
 
   return new Promise<void>((resolve) => {
     let isFirst = true;
     let lastModel = model;
     let isComplete = false;
     let toolCallStreamIndex = 0;
+    let streamHeadersSent = false;
+
+    const ensureStreamHeaders = (sessionId?: string): void => {
+      if (streamHeadersSent) return;
+      if (sessionId) {
+        res.setHeader("X-Session-Id", sessionId);
+      }
+      res.flushHeaders();
+      streamHeadersSent = true;
+      res.write(":ok\n\n");
+    };
 
     res.on("close", () => {
       if (!isComplete) subprocess.kill();
       resolve();
     });
 
+    subprocess.on("session_init", (ev: { sessionId: string }) => {
+      ensureStreamHeaders(ev.sessionId);
+    });
+
     subprocess.on("content_delta", (delta: ContentDeltaEvent) => {
+      ensureStreamHeaders();
       if (delta.text && !res.writableEnded) {
         const chunk = createStreamChunk(requestId, lastModel, delta.text, isFirst);
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
@@ -160,6 +202,7 @@ async function handleStreamingResponse(
 
     subprocess.on("tool_activity", (ev: ToolActivityEvent) => {
       if (res.writableEnded) return;
+      ensureStreamHeaders();
 
       const isStart = ev.subtype !== "completed";
       if (EMIT_OPENAI_TOOL_DELTAS && isStart) {
@@ -199,7 +242,9 @@ async function handleStreamingResponse(
     subprocess.on("result", (result: ResultEvent) => {
       isComplete = true;
       if (result.model) lastModel = result.model;
+      void persistSessionMapping(sessionCtx, result.sessionId);
       if (!res.writableEnded) {
+        ensureStreamHeaders(result.sessionId);
         const done = createDoneChunk(requestId, lastModel, result.usage);
         res.write(`data: ${JSON.stringify(done)}\n\n`);
         res.write("data: [DONE]\n\n");
@@ -212,6 +257,7 @@ async function handleStreamingResponse(
     subprocess.on("error", (error: Error) => {
       console.error("[stream] Error:", error.message);
       if (!res.writableEnded) {
+        ensureStreamHeaders();
         res.write(
           `data: ${JSON.stringify({
             error: { message: error.message, type: "server_error", code: null },
@@ -224,6 +270,7 @@ async function handleStreamingResponse(
 
     subprocess.on("close", (code: number | null) => {
       if (!res.writableEnded) {
+        ensureStreamHeaders();
         if (code !== 0 && !isComplete) {
           res.write(
             `data: ${JSON.stringify({
@@ -241,7 +288,7 @@ async function handleStreamingResponse(
       resolve();
     });
 
-    subprocess.start(prompt, { model, apiKey }).catch((err) => {
+    subprocess.start(prompt, opts).catch((err) => {
       console.error("[stream] Start error:", err);
       if (!res.writableEnded) {
         res.write(
@@ -264,10 +311,11 @@ async function handleNonStreamingResponse(
   res: Response,
   subprocess: CursorSubprocess,
   prompt: string,
-  model: string,
   requestId: string,
-  apiKey?: string
+  opts: SubprocessOptions,
+  sessionCtx: ResolvedSession
 ): Promise<void> {
+  const model = opts.model;
   return new Promise<void>((resolve) => {
     let finalResult: ResultEvent | null = null;
     let toolAnnotation = "";
@@ -296,11 +344,16 @@ async function handleNonStreamingResponse(
 
     subprocess.on("close", () => {
       if (finalResult) {
+        void persistSessionMapping(sessionCtx, finalResult.sessionId);
+        if (finalResult.sessionId) {
+          res.setHeader("X-Session-Id", finalResult.sessionId);
+        }
         const response = createChatResponse(
           requestId,
           finalResult.model || model,
           toolAnnotation + finalResult.text,
-          finalResult.usage
+          finalResult.usage,
+          finalResult.sessionId
         );
         res.json(response);
       } else if (!res.headersSent) {
@@ -315,7 +368,7 @@ async function handleNonStreamingResponse(
       resolve();
     });
 
-    subprocess.start(prompt, { model, apiKey }).catch((error) => {
+    subprocess.start(prompt, opts).catch((error) => {
       if (!res.headersSent) {
         res.status(500).json({
           error: {
@@ -328,6 +381,26 @@ async function handleNonStreamingResponse(
       resolve();
     });
   });
+}
+
+export async function handleSessions(req: Request, res: Response): Promise<void> {
+  try {
+    const cwd =
+      typeof req.query.cwd === "string" && req.query.cwd.trim()
+        ? req.query.cwd.trim()
+        : undefined;
+    const limitRaw = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 20;
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 20;
+
+    const data = await listSessions({ cwd, limit });
+    res.json({ object: "list", data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[sessions] Error:", message);
+    res.status(500).json({
+      error: { message, type: "server_error", code: null },
+    });
+  }
 }
 
 export function handleModels(_req: Request, res: Response): void {

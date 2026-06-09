@@ -92,9 +92,10 @@ export function createChatResponse(
   requestId: string,
   model: string,
   text: string,
-  usage?: OpenAICompletionUsage
+  usage?: OpenAICompletionUsage,
+  sessionId?: string
 ): OpenAIChatResponse {
-  return {
+  const response: OpenAIChatResponse = {
     id: `chatcmpl-${requestId}`,
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
@@ -115,4 +116,8 @@ export function createChatResponse(
       total_tokens: 0,
     },
   };
+  if (sessionId) {
+    response.session_id = sessionId;
+  }
+  return response;
 }

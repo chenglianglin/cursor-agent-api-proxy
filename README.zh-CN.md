@@ -115,7 +115,55 @@ gemini-3-pro          # Gemini 3 Pro
 |------|------|------|
 | `/health` | GET | 健康检查 |
 | `/v1/models` | GET | 模型列表 |
-| `/v1/chat/completions` | POST | 聊天补全（支持 `stream: true`） |
+| `/v1/sessions` | GET | 列出 Cursor CLI session（按最近修改时间排序） |
+| `/v1/chat/completions` | POST | 聊天补全（支持 `stream: true`、`session_id` 续接） |
+
+### Session 查询与续接
+
+Cursor CLI 的 session 保存在 `~/.cursor/chats/<workspace_md5>/<session_id>/`。代理会扫描本机目录并提供续接能力。
+
+**列出最近 session：**
+
+```bash
+curl 'http://localhost:4646/v1/sessions?limit=5'
+curl 'http://localhost:4646/v1/sessions?cwd=/path/to/project&limit=1'
+```
+
+**续接已有 session：**
+
+```bash
+curl -X POST http://localhost:4646/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"auto","session_id":"<uuid>","messages":[{"role":"user","content":"继续"}]}'
+```
+
+响应会带上 `X-Session-Id` header；非流式 JSON 还会包含 `session_id` 字段，便于 OpenClaw 等客户端保存后下次续接。
+
+### OpenClaw 自动续接（推荐）
+
+默认开启：当请求带有稳定的对话 key 时，代理会自动把该 key 映射到 Cursor CLI `session_id`，同一对话的后续消息会 `--resume`，无需客户端手动传 `session_id`。
+
+识别顺序（优先级从高到低）：
+
+1. 请求 body 的 `session_id`（显式指定，最高优先级）
+2. Header `x-openclaw-session-key`
+3. Header `x-cursor-session-key`
+4. Header `x-session-affinity` / `session_id` / `x-openclaw-session-id` / `x-client-request-id`
+5. 请求 body 的 `user` 字段
+6. OpenClaw 消息 metadata 中的 `chat_id`（自动从 user 消息解析，无需额外配置）
+
+映射表保存在 `~/.cursor-agent-api/session-map.json`。服务端 log 示例：
+
+```
+session=new (key=conv:abc123)                    # 第一次，新建
+session=b64caee3-... (mapped:conv:abc123)      # 第二次，自动 resume
+```
+
+**OpenClaw 注意**：默认情况下 OpenClaw 不会发送 `user` 或 `x-openclaw-session-key`，但会在 user 消息里嵌入 `chat_id` metadata，代理会自动识别。若 log 仍显示 `session=new`（无 key），说明请求里没有任何可识别的对话 key。
+
+也可在 `openclaw.json` 为 `cursor-local` 配置 provider headers（推荐 `x-openclaw-session-key: "{{session.key}}"`，需 OpenClaw 支持 header 模板）。
+
+关闭自动映射：`CURSOR_PROXY_AUTO_SESSION=false`
 
 ## 配置
 
@@ -123,6 +171,7 @@ gemini-3-pro          # Gemini 3 Pro
 |---------|--------|------|
 | `PORT` | `4646` | 监听端口（或 `cursor-agent-api start 8080`） |
 | `CURSOR_API_KEY` | - | `agent login` 的替代方案 |
+| `CURSOR_PROXY_AUTO_SESSION` | `true` | 用 `user` / session header 自动映射并 resume Cursor session |
 
 ## 开机自启
 

@@ -8,6 +8,7 @@ import {
   handleChatCompletions,
   handleModels,
   handleHealth,
+  handleSessions,
 } from "./routes.js";
 
 let server: Server | null = null;
@@ -42,7 +43,7 @@ export async function startServer(
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization"
+      "Content-Type, Authorization, X-OpenClaw-Session-Key, X-Cursor-Session-Key, X-Session-Affinity, Session-Id, X-OpenClaw-Session-Id, X-Client-Request-Id"
     );
     next();
   });
@@ -53,6 +54,7 @@ export async function startServer(
 
   app.get("/health", handleHealth);
   app.get("/v1/models", handleModels);
+  app.get("/v1/sessions", handleSessions);
   app.post("/v1/chat/completions", handleChatCompletions);
 
   app.use((_req, res) => {
